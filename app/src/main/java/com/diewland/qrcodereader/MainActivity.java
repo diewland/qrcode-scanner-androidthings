@@ -1,13 +1,20 @@
 package com.diewland.qrcodereader;
 
 import android.app.Activity;
+import android.graphics.Color;
 import android.graphics.PointF;
 import android.os.Bundle;
-import android.view.View;
-import android.widget.Button;
-import android.widget.TextView;
+import android.os.Handler;
+import android.util.Log;
+import android.widget.LinearLayout;
 
 import com.dlazaro66.qrcodereaderview.QRCodeReaderView;
+import com.google.android.things.contrib.driver.apa102.Apa102;
+import com.google.android.things.contrib.driver.ht16k33.AlphanumericDisplay;
+import com.google.android.things.contrib.driver.ht16k33.Ht16k33;
+import com.google.android.things.contrib.driver.rainbowhat.RainbowHat;
+
+import java.io.IOException;
 
 /**
  * Skeleton of an Android Things activity.
@@ -30,8 +37,10 @@ import com.dlazaro66.qrcodereaderview.QRCodeReaderView;
  */
 public class MainActivity extends Activity implements QRCodeReaderView.OnQRCodeReadListener {
 
-    private TextView resultTextView;
-    private Button btnClear;
+    private String TAG = "DOOR";
+    private boolean process_lock;
+
+    private LinearLayout resultLayout;
     private QRCodeReaderView qrCodeReaderView;
 
     @Override
@@ -39,8 +48,9 @@ public class MainActivity extends Activity implements QRCodeReaderView.OnQRCodeR
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        resultTextView = (TextView) findViewById(R.id.resultTextView);
-        btnClear = (Button) findViewById(R.id.btn_clear);
+        process_lock = false;
+
+        resultLayout = (LinearLayout)findViewById(R.id.ll_result);
         qrCodeReaderView = (QRCodeReaderView) findViewById(R.id.qrdecoderview);
         qrCodeReaderView.setOnQRCodeReadListener(this);
 
@@ -51,21 +61,13 @@ public class MainActivity extends Activity implements QRCodeReaderView.OnQRCodeR
         qrCodeReaderView.setAutofocusInterval(2000L);
 
         // Use this function to enable/disable Torch
-        qrCodeReaderView.setTorchEnabled(true);
+        qrCodeReaderView.setTorchEnabled(false);
 
         // Use this function to set front camera preview
         qrCodeReaderView.setFrontCamera();
 
         // Use this function to set back camera preview
         qrCodeReaderView.setBackCamera();
-
-        // bind clear button
-        btnClear.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                resultTextView.setText("");
-            }
-        });
     }
 
     // Called when a QR is decoded
@@ -73,7 +75,78 @@ public class MainActivity extends Activity implements QRCodeReaderView.OnQRCodeR
     // "points" : points where QR control points are placed in View
     @Override
     public void onQRCodeRead(String text, PointF[] points) {
-        resultTextView.setText(text + " ("+ text.length() +")");
+
+        if(!process_lock){
+            // verify success
+            process_lock = true;
+
+            try {
+                playAnimation();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            resultLayout.setBackgroundColor(Color.GREEN);
+            Log.d(TAG, text);
+
+            Handler handler = new Handler();
+            handler.postDelayed(new Runnable() {
+                public void run() {
+                    try {
+                        stopAnimation();
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                    resultLayout.setBackgroundColor(Color.BLACK);
+                    process_lock =  false;
+                }
+            }, 1*1000);
+        }
+        else {
+            Log.d(TAG, "process is locked.");
+        }
+
+    }
+
+    private void playAnimation() throws IOException {
+        // text
+        AlphanumericDisplay segment = RainbowHat.openDisplay();
+        segment.setBrightness(Ht16k33.HT16K33_BRIGHTNESS_MAX);
+        segment.display("OPEN");
+        segment.setEnabled(true);
+        segment.close();
+
+        // rainbow lights
+        /*
+        Apa102 ledstrip = RainbowHat.openLedStrip();
+        ledstrip.setBrightness(31);
+        int[] rainbow = new int[RainbowHat.LEDSTRIP_LENGTH];
+        for (int i = 0; i < rainbow.length; i++) {
+            rainbow[i] = Color.HSVToColor(255, new float[]{i * 360.f / rainbow.length, 1.0f, 1.0f});
+        }
+        ledstrip.write(rainbow);
+        ledstrip.close();
+        */
+    }
+
+    private void stopAnimation() throws IOException {
+        // text
+        AlphanumericDisplay segment = RainbowHat.openDisplay();
+        segment.setBrightness(Ht16k33.HT16K33_BRIGHTNESS_MAX);
+        segment.display("");
+        segment.setEnabled(true);
+        segment.close();
+
+        // rainbow lights
+        /*
+        Apa102 ledstrip = RainbowHat.openLedStrip();
+        ledstrip.setBrightness(0);
+        int[] rainbow = new int[RainbowHat.LEDSTRIP_LENGTH];
+        for (int i = 0; i < rainbow.length; i++) {
+            rainbow[i] = Color.HSVToColor(255, new float[]{i * 360.f / rainbow.length, 1.0f, 1.0f});
+        }
+        ledstrip.write(rainbow);
+        ledstrip.close();
+        */
     }
 
     @Override
@@ -87,4 +160,5 @@ public class MainActivity extends Activity implements QRCodeReaderView.OnQRCodeR
         super.onPause();
         qrCodeReaderView.stopCamera();
     }
+
 }
